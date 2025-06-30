@@ -16,11 +16,13 @@ classifiers = [
 ]
 dependencies = [
   "pandas>=2.3.0",
+  "litellm>=1.73.6",
   "pymilvus[model]==2.6.0b0",
   "pydantic>=2.11.7",
+  "beautifulsoup4",
   "python-dotenv",
+  "PyYAML",
   "loguru",
-  "wcwidth",
 ]
 
 [tool.hatch.build.targets.wheel]

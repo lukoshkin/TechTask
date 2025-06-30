@@ -13,7 +13,8 @@ import pandas as pd
 from loguru import logger
 from pymilvus import DataType, Function, FunctionType, MilvusClient
 
-from src.models import MilvusConfig
+from src.mocks import DbConnector
+from src.models import DatabaseConfig
 
 
 def batch_generator(
@@ -35,10 +36,10 @@ def batch_generator(
         yield data[i : i + batch_size]
 
 
-class MilvusDB:
+class MilvusDB(DbConnector):
     """Milvus Connector for TechTask Knowledge Base."""
 
-    def __init__(self, cfg: MilvusConfig) -> None:
+    def __init__(self, cfg: DatabaseConfig) -> None:
         """
         Initialize the MilvusDB class with connection parameters.
 
@@ -48,7 +49,6 @@ class MilvusDB:
         """
         self.cfg = cfg
         self.client = MilvusClient(uri=cfg.uri, token=cfg.token)
-        self.collection_name = cfg.collection
         self._metadata_fields = [
             "id",
             "categoryId",
@@ -67,8 +67,8 @@ class MilvusDB:
         - question_vector: For the title field (question)
         - answer_vector: For the description_text field (answer)
         """
-        if self.client.has_collection(self.collection_name):
-            logger.info(f"Collection '{self.collection_name}' already exists.")
+        if self.client.has_collection(self.cfg.collection):
+            logger.info(f"Collection '{self.cfg.collection}' already exists.")
             return
 
         schema = MilvusClient.create_schema(auto_id=False)
@@ -93,13 +93,13 @@ class MilvusDB:
         schema.add_field(
             field_name="title",
             datatype=DataType.VARCHAR,
-            max_length=self.cfg.text_chunk_size,
+            max_length=self.cfg.text_size,
             enable_analyzer=True,
         )
         schema.add_field(
             field_name="description_text",
             datatype=DataType.VARCHAR,
-            max_length=self.cfg.text_chunk_size,
+            max_length=self.cfg.text_size,
             enable_analyzer=True,
         )
         schema.add_field(
@@ -160,12 +160,12 @@ class MilvusDB:
         index_params.add_index(
             field_name="question_vector",
             index_type="AUTOINDEX",
-            metric_type="COSINE",
+            metric_type="IP",
         )
         index_params.add_index(
             field_name="answer_vector",
             index_type="AUTOINDEX",
-            metric_type="COSINE",
+            metric_type="IP",
         )
         # index_params.add_index(
         #     field_name="answer_vector_sparse",
@@ -174,12 +174,12 @@ class MilvusDB:
         #     params={"inverted_index_algo": "DAAT_MAXSCORE"},
         # )
         self.client.create_collection(
-            collection_name=self.collection_name,
+            collection_name=self.cfg.collection,
             schema=schema,
             index_params=index_params,
             consistency_level="Strong",
         )
-        logger.info(f"Created collection: '{self.collection_name}'")
+        logger.info(f"Created collection: '{self.cfg.collection}'")
 
     def insert_data(
         self,
@@ -195,7 +195,7 @@ class MilvusDB:
         if batch_size is None:
             try:
                 self.client.insert(
-                    collection_name=self.collection_name,
+                    collection_name=self.cfg.collection,
                     data=df[self._metadata_fields].to_dict(orient="records"),
                 )
                 return
@@ -214,7 +214,7 @@ class MilvusDB:
         gen = batch_generator(df[self._metadata_fields], batch_size)
         for idx, batch in enumerate(gen):
             self.client.insert(
-                collection_name=self.collection_name,
+                collection_name=self.cfg.collection,
                 data=batch.to_dict(orient="records"),
             )
             logger.info(f"Inserted batch #{idx + 1}")
@@ -231,18 +231,18 @@ class MilvusDB:
         The consistency level is set to `register_consistency` by default.
         """
         return self.client.query(
-            collection_name=self.collection_name,
+            collection_name=self.cfg.collection,
             output_fields=["count(*)"],
             consistency_level=consistency_level,
         )[0]["count(*)"]
 
     def drop_collection(self, **kwargs: Any) -> None:
         """Drop the collection."""
-        if not self.client.has_collection(self.collection_name):
+        if not self.client.has_collection(self.cfg.collection):
             logger.warning(
-                f"Collection '{self.collection_name}' cannot be removed"
+                f"Collection '{self.cfg.collection}' cannot be removed"
                 ", since not found."
             )
             return
-        self.client.release_collection(self.collection_name, **kwargs)
-        self.client.drop_collection(self.collection_name)
+        self.client.release_collection(self.cfg.collection, **kwargs)
+        self.client.drop_collection(self.cfg.collection)

@@ -7,61 +7,37 @@ content.
 """
 
 from pathlib import Path
-from typing import Protocol
 
 import pandas as pd
 from loguru import logger
 
+from src.mocks import DbConnector
+from src.models import PreprocessingConfig
 from src.text_splitter import RecursiveCharacterTextSplitter
-
-
-class DBConnector(Protocol):
-    """Mock-interface for database connectors."""
-
-    def insert_data(self, data: pd.DataFrame) -> None:
-        """
-        Insert data into the database.
-
-        Args:
-            data: DataFrame containing the data to be inserted
-        """
 
 
 class DataProcessor:
     """TechTask data processor."""
 
-    output_name = "processed_knowledge_base.csv"
-
-    def __init__(
-        self,
-        output_dir: str | None = None,
-        html_dir: str = "html_content",
-        chunk_size: int = 512,
-        chunk_overlap: int = 100,
-    ):
+    def __init__(self, cfg: PreprocessingConfig):
         """
         Initialize the DataPreparator for processing knowledge base data.
 
         Args:
-            output_dir: Directory to save the processed data
-            html_dir: Directory to save HTML content
-            chunk_size: Maximum size of text chunks
-            chunk_overlap: Overlap between chunks
+            cfg: Configuration for the database connection and processing
         """
-        self.output_dir = output_dir
-        self.html_dir = html_dir
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
+        self.cfg = cfg
+        self._save_also_txt = cfg.save_html_txt
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
+            chunk_size=cfg.text_chunk_size,
+            chunk_overlap=cfg.text_chunk_overlap // 2,
             separators=["\n\n", "\n", r"\s{3,}", "  ", " "],
             strip_whitespace=True,
         )
         self.tsplit_map = {
             "ja": RecursiveCharacterTextSplitter(
-                chunk_size=chunk_size // 2,
-                chunk_overlap=chunk_overlap,
+                chunk_size=cfg.text_chunk_size // 2,
+                chunk_overlap=cfg.text_chunk_overlap // 2,
                 separators=["\n", r"\s{3,}", "。", "!", "?", "、", " "],
                 strip_whitespace=True,
             )
@@ -81,8 +57,8 @@ class DataProcessor:
 
     def output_path(self, csv_path: str) -> Path:
         """Get the output path for the processed CSV file."""
-        output_path = Path(self.output_dir or Path(csv_path).parent)
-        return output_path / self.output_name
+        output_path = Path(self.cfg.data_dir or Path(csv_path).parent)
+        return output_path / self.cfg.processed_data
 
     def __call__(self, csv_path: str, chunksize: int = 512) -> None:
         """
@@ -100,7 +76,7 @@ class DataProcessor:
         output_csv_path = self.output_path(csv_path)
         output_path = output_csv_path.parent
         output_path.mkdir(exist_ok=True)
-        html_path = output_path / self.html_dir
+        html_path = output_path / self.cfg.html_dir
         html_path.mkdir(exist_ok=True)
 
         if output_csv_path.exists():
@@ -123,7 +99,7 @@ class DataProcessor:
         logger.info(f"Total processed rows: {total_rows}")
         logger.info(f"Processed data saved to {output_csv_path}")
 
-    def _save_html_content(self, row: pd.Series, html_path: Path) -> None:
+    def _save_html_content(self, row: pd.Series, html_dir: Path) -> None:
         """
         Save HTML content from a row to a file.
 
@@ -131,11 +107,16 @@ class DataProcessor:
             row: DataFrame row containing HTML content
             html_path: Base path for HTML files
         """
-        folder_path = html_path / str(row["folderId"])
+        folder_path = html_dir / str(row["folderId"])
         folder_path.mkdir(exist_ok=True)
-        html_file_path = folder_path / f"{row['id']}.html"
-        with open(html_file_path, "w", encoding="utf-8") as fd:
+        html_path = folder_path / f"{row['id']}.html"
+        with open(html_path, "w", encoding="utf-8") as fd:
             fd.write(row["description"])
+
+        if self._save_also_txt:
+            txt_path = html_path.with_suffix(".txt")
+            with open(txt_path, "w", encoding="utf-8") as fd:
+                fd.write(row["description"])
 
     def process_chunk(
         self,
@@ -162,12 +143,12 @@ class DataProcessor:
             self._save_html_content(row, html_path)
             text = row["description_text"]
             text_utf8 = text.encode("utf-8", errors="ignore")
-            if len(text_utf8) > self.chunk_size:
+            if len(text_utf8) > self.cfg.text_chunk_size:
                 tsplit = self.tsplit_map.get(row["lang"], self.text_splitter)
                 chunks = tsplit.split_text(text)
                 for idx, chunk in enumerate(chunks):
                     chunk_utf8 = chunk.encode("utf-8", errors="ignore")
-                    if len(chunk_utf8) > self.chunk_size:
+                    if len(chunk_utf8) > self.cfg.text_chunk_size:
                         logger.warning(
                             "Chunk exceeds maximum size.\n"
                             f"Text: {chunk}"
@@ -241,7 +222,7 @@ class DataProcessor:
 
     @staticmethod
     def insert_data(
-        db: DBConnector, csv_path: str, chunksize: int = 512
+        db: DbConnector, csv_path: str, chunksize: int = 512
     ) -> None:
         """
         Insert data from a CSV file into the database.
