@@ -62,7 +62,9 @@ class DataProcessor:
 
     def __call__(self, csv_path: str, chunksize: int = 512) -> None:
         """
-        Process data from CSV file for embedding into MilvusDB, reading in chunks.
+        Process data from CSV file for embedding into MilvusDB.
+
+        Reads in chunks to mitigate the compute burden.
 
         Args:
             csv_path: Path to the CSV file containing the knowledge base data

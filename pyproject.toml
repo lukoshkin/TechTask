@@ -25,6 +25,10 @@ dependencies = [
   "loguru",
 ]
 
+[project.optional-dependencies]
+eval = ["ragas>=0.2.15", "langchain-community>=0.3.26", "rapidfuzz"]
+
+
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
 
@@ -105,7 +109,6 @@ warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
-
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

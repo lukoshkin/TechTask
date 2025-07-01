@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from src.db import MilvusDB
+from src.mocks import DbConnector
 from src.models import RagConfig
 from src.preproc import DataProcessor
 from src.rag import RagPipeline
@@ -38,37 +39,49 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
+def load_config() -> RagConfig:
+    """Load the RAG configuration from 'rag-config.yaml'."""
     load_dotenv()
 
-    args = parse_args()
     rag_cfg_file = "rag-config.yaml"
-    drop_collection = args.zero_count >= 1
-    drop_preprocessed = args.zero_count >= 2
-
     rag_cfg = RagConfig.from_yaml(rag_cfg_file)
     logger.debug(f"Loaded configuration: {rag_cfg}")
+    return rag_cfg
 
+
+def build_db(rag_cfg: RagConfig, reset_lvl: int = 0) -> DbConnector:
+    """Preprocess data, build DB, ingest data."""
     preproc = DataProcessor(rag_cfg.preprocessing)
     output_path = preproc.output_path(rag_cfg.input_data)
-    if drop_preprocessed and output_path.exists():
+    if reset_lvl >= 2 and output_path.exists():
         output_path.unlink()
 
     if not output_path.exists():
         preproc(rag_cfg.input_data)
 
+    import sys
+    sys.exit()
+
     db = MilvusDB(rag_cfg.database)
-    if drop_collection:
+    if reset_lvl >= 1:
         db.drop_collection()
 
     db.create_collection()
     if db.count() == 0:
         preproc.insert_data(db, str(output_path))
 
-    retriever = HybridRetriever(rag_cfg.retrieval, db)
-    rag = RagPipeline(rag_cfg, retriever)
-    print(rag.answer(args.question))
+    return db
+
+
+def build_rag(reset_lvl: int) -> RagPipeline:
+    """Build the RAG pipeline."""
+    cfg = load_config()
+    db = build_db(cfg, reset_lvl)
+    retriever = HybridRetriever(cfg.retrieval, db)
+    return RagPipeline(cfg, retriever)
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    rag = build_rag(args.zero_count)
+    print(rag.answer(args.question))

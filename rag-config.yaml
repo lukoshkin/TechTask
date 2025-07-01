@@ -1,10 +1,10 @@
 ---
 # RAG Configuration File
 
-input_data: data/knowledge_base100.csv  # Path to the input data file
+input_data: data/knowledge_base50.csv  # Path to the input data file
 
 preprocessing:
-  processed_data: processed_kb100.csv  # Name of the processed data file
+  processed_data: processed_kb50.csv  # Name of the processed data file
   html_dir: html_content  # Name of the parent folder of folders with HTMLs
   data_dir: data  # Path to where all preprocessing results are stored
   text_chunk_overlap: 0  # Overlap between text chunks for indexing

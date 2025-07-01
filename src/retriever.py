@@ -43,8 +43,6 @@ class HybridRetriever:
         """
         top_k = top_k or self.cfg.top_k
         questions = [question] if isinstance(question, str) else question
-        # if not self.client.has_collection_loaded(self.collection):
-        #     self.client.load_collection(self.collection)
 
         try:
             results = self._retrieve(questions, top_k=top_k)

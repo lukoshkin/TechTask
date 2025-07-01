@@ -4,6 +4,22 @@ import yaml
 from pydantic import BaseModel, Field
 
 
+def from_yaml(file_path: str | Path) -> BaseModel:
+    """Load configuration from YAML file.
+
+    Args:
+        file_path: Path to the YAML file.
+
+    Returns
+    -------
+        model_instance: Configuration object.
+    """
+    if not Path(file_path).exists():
+        raise FileNotFoundError(f"Configuration file {file_path} not found.")
+    with open(file_path, encoding="utf-8") as fd:
+        return yaml.safe_load(fd)
+
+
 class RetrievedDocument(BaseModel):
     """Model representing a retrieved document."""
 
@@ -32,7 +48,7 @@ class PreprocessingConfig(BaseModel):
 
     text_chunk_size: int = 512
     text_chunk_overlap: int = 64
-    data_dir: str = "data"
+    data_dir: str | None = "data"  # Defaults to the provided path when not set
     processed_data: str = "processed_knowledge_base.csv"
     html_dir: str = "html_content"
     save_html_txt: bool = True
@@ -81,19 +97,31 @@ class RagConfig(BaseModel):
 
     @classmethod
     def from_yaml(cls, file_path: str | Path) -> "RagConfig":
-        """Load configuration from YAML file.
+        """Load configuration from a YAML file."""
+        return cls.model_validate(from_yaml(file_path))
 
-        Args:
-            file_path: Path to the YAML file.
 
-        Returns
-        -------
-            RagConfig: Configuration object.
-        """
-        if not Path(file_path).exists():
-            raise FileNotFoundError(
-                f"Configuration file {file_path} not found."
-            )
-        with open(file_path, encoding="utf-8") as fd:
-            config_data = yaml.safe_load(fd)
-            return cls.model_validate(config_data)
+class DataGenConfig(BaseModel):
+    """Configuration for synthetic dataset generation."""
+
+    lang_cardinality: int = 25
+    output_dir: str = "data"
+    synthetic_dir: str = "synthetic"
+    output_filename: str = "test_dataset.csv"
+    random_state: int | None = None
+
+    llm_model: str = "gpt-4.1-mini-2025-04-14"
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dimension: int = 768
+
+
+class TestConfig(BaseModel):
+    """Configuration for testing the RAG pipeline."""
+
+    chunked_data: str = "data/processed_kb50.csv"
+    datagen: DataGenConfig = Field(default_factory=DataGenConfig)
+
+    @classmethod
+    def from_yaml(cls, file_path: str | Path) -> "TestConfig":
+        """Load configuration from a YAML file."""
+        return cls.model_validate(from_yaml(file_path))
