@@ -94,6 +94,26 @@ The system provides comprehensive configuration options through YAML files:
   - Evaluation LLM selection
   - Synthetic data parameters
 
+## Installation
+
+### Prerequisites
+
+- **Docker**: Docker installation with the `compose` subcommand
+- **uv**: Python package and project manager
+
+### Setup
+
+1. Run the bootstrap script to set up the environment:
+
+```bash
+./bootstrap.sh
+```
+
+This script:
+
+- Fetches the docker compose file for Milvus standalone deployment
+- Sets up your OpenAI API key in the proper environment variable
+
 ## Usage
 
 To run the RAG system from CLI:
