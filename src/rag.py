@@ -32,9 +32,10 @@ class RagPipeline:
     def answer(
         self,
         question: str,
-        retrieval_top_k: int = 5,
-        temperature: float = 0.3,
-    ) -> str:
+        retrieval_top_k: int | None = None,
+        temperature: float | None = None,
+        return_retrieved_context: bool = False,
+    ) -> str | tuple[str, list[str]]:
         """Generate a source-referenced answer to a question.
 
         Args:
@@ -46,7 +47,10 @@ class RagPipeline:
         -------
             HTML answer with expandable sections for retrieved documents.
         """
-        retrieved_docs = self.retriever(question, top_k=retrieval_top_k)
+        retrieved_docs = self.retriever(
+            question,
+            top_k=retrieval_top_k or self.cfg.retrieval.top_k,
+        )
         if not retrieved_docs:
             logger.warning("No documents retrieved to answer the question")
             return (
@@ -87,20 +91,19 @@ class RagPipeline:
                     ),
                 },
             ],
-            temperature=self.cfg.llm.temperature,
+            temperature=temperature or self.cfg.llm.temperature,
             max_tokens=self.cfg.llm.max_tokens,
         )
-        return f"""
-        <div class="rag-answer">
-            <div class="answer-text">
-                <p>{response.choices[0].message.content}</p>
-            </div>
-            <div class="source-documents">
-                <h4>Source Documents:</h4>
-                {"".join(html_sections)}
-            </div>
-        </div>
-        """
+        answer = f"""<div class="rag-answer">
+<div class="answer-text">
+    <p>{response.choices[0].message.content}</p>
+</div>
+<div class="source-documents">
+    <h4>Source Documents:</h4>
+    {"".join(html_sections)}
+</div>
+</div>"""
+        return (answer, context) if return_retrieved_context else answer
 
     def _load_html_content(
         self,

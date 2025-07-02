@@ -59,9 +59,6 @@ def build_db(rag_cfg: RagConfig, reset_lvl: int = 0) -> DbConnector:
     if not output_path.exists():
         preproc(rag_cfg.input_data)
 
-    import sys
-    sys.exit()
-
     db = MilvusDB(rag_cfg.database)
     if reset_lvl >= 1:
         db.drop_collection()
@@ -73,7 +70,7 @@ def build_db(rag_cfg: RagConfig, reset_lvl: int = 0) -> DbConnector:
     return db
 
 
-def build_rag(reset_lvl: int) -> RagPipeline:
+def build_rag(reset_lvl: int = 0) -> RagPipeline:
     """Build the RAG pipeline."""
     cfg = load_config()
     db = build_db(cfg, reset_lvl)

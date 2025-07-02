@@ -38,7 +38,7 @@ class DataProcessor:
             "ja": RecursiveCharacterTextSplitter(
                 chunk_size=cfg.text_chunk_size // 2,
                 chunk_overlap=cfg.text_chunk_overlap // 2,
-                separators=["\n", r"\s{3,}", "。", "!", "?", "、", " "],
+                separators=["\n", r"\s{3,}", "。", "？", "、", " "],
                 strip_whitespace=True,
             )
         }

@@ -44,6 +44,19 @@ class SyntheticDataset:
     the knowledge base provided. It can be configured through the TestConfig.
     """
 
+    lang_map: dict[str, str] = {
+        "en": "English",
+        "es": "Spanish",
+        "ru": "Russian",
+        "fr": "French",
+        "de": "German",
+        "it": "Italian",
+        "pt": "Portuguese",
+        "zh": "Chinese",
+        "ja": "Japanese",
+        "he_IL": "Hebrew",
+    }
+
     def __init__(self, cfg: DataGenConfig):
         """Initialize the SyntheticDataset.
 
@@ -175,14 +188,24 @@ class SyntheticDataset:
             distribution: Adapted query prompts.
         """
         distribution = default_query_distribution(self.llm)
+        if lang == "en":
+            return distribution
+
+        _lang = self.lang_map.get(lang, "")
+        if not _lang:
+            _lang = lang
+            logger.warning(
+                f"Language '{lang}' not found in lang_map. "
+                "Adapting using the raw value."
+            )
         for query, _ in distribution:
-            prompts = asyncio.run(query.adapt_prompts(lang, llm=self.llm))
+            prompts = asyncio.run(query.adapt_prompts(_lang, llm=self.llm))
             query.set_prompts(**prompts)
         return distribution
 
     def generate_dataset(
         self, ignore_previous_generation: bool = False
-    ) -> pd.DataFrame | None:
+    ) -> tuple[list[Path], pd.DataFrame | None]:
         """Generate synthetic test dataset.
 
         Args:
@@ -191,15 +214,17 @@ class SyntheticDataset:
 
         Returns
         -------
-            pd.DataFrame: Generated synthetic dataset if any documents were
-                processed. Otherwise, None.
-
+            list[Path]: List of paths to the generated dataset chunks.
+            pd.DataFrame | None: Generated synthetic dataset
+                if any documents were processed, otherwise, None.
         """
         frames = []
+        data_paths = []
         for csv_path in self.interim_dir.glob("*.csv"):
             logger.info(f"Working on CSV file: {csv_path}")
             lang = csv_path.stem.rsplit("-")[0]
             dset_path = self.output_dir / f"dset-{lang}.csv"
+            data_paths.append(dset_path)
             if not ignore_previous_generation and dset_path.exists():
                 logger.warning(
                     f"Dataset for language '{lang}' already exists. "
@@ -219,14 +244,14 @@ class SyntheticDataset:
                 knowledge_graph=kg,
             )
             df = generator.generate(
-                testset_size=self.cfg.lang_cardinality,
+                testset_size=self.cfg.testset_size,
                 query_distribution=self.adapt_queries(lang),
             ).to_pandas()
             df.to_csv(dset_path, index=False)
             frames.append(df)
 
+        df_all = None
         if frames:
             df_all = pd.concat(frames)
             df_all.to_csv(self.output_path, index=False)
-            return df_all
-        return None
+        return data_paths, df_all

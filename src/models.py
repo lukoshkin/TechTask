@@ -48,7 +48,7 @@ class PreprocessingConfig(BaseModel):
 
     text_chunk_size: int = 512
     text_chunk_overlap: int = 64
-    data_dir: str | None = "data"  # Defaults to the provided path when not set
+    data_dir: str = "data"
     processed_data: str = "processed_knowledge_base.csv"
     html_dir: str = "html_content"
     save_html_txt: bool = True
@@ -105,6 +105,7 @@ class DataGenConfig(BaseModel):
     """Configuration for synthetic dataset generation."""
 
     lang_cardinality: int = 25
+    testset_size: int = 10
     output_dir: str = "data"
     synthetic_dir: str = "synthetic"
     output_filename: str = "test_dataset.csv"

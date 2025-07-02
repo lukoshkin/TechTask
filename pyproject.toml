@@ -27,6 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 eval = ["ragas>=0.2.15", "langchain-community>=0.3.26", "rapidfuzz"]
+notebook = ["notebook"]
 
 
 [tool.hatch.build.targets.wheel]
