@@ -30,6 +30,7 @@ from ragas.testset.transforms import (
 # from ragas.testset.transforms.relationship_builders.traditional import (
 #     JaccardSimilarityBuilder,
 # )
+from src.eval.utils import LangMap
 from src.models import DataGenConfig
 
 
@@ -44,19 +45,6 @@ class SyntheticDataset:
     the knowledge base provided. It can be configured through the TestConfig.
     """
 
-    lang_map: dict[str, str] = {
-        "en": "English",
-        "es": "Spanish",
-        "ru": "Russian",
-        "fr": "French",
-        "de": "German",
-        "it": "Italian",
-        "pt": "Portuguese",
-        "zh": "Chinese",
-        "ja": "Japanese",
-        "he_IL": "Hebrew",
-    }
-
     def __init__(self, cfg: DataGenConfig):
         """Initialize the SyntheticDataset.
 
@@ -64,17 +52,16 @@ class SyntheticDataset:
             config: Configuration for the RAG pipeline.
         """
         self.cfg = cfg
-        self.langs: list[str]
         self.output_dir = Path(cfg.output_dir) / cfg.synthetic_dir
         self.interim_dir = self.output_dir / "interim"
         self.interim_dir.mkdir(parents=True, exist_ok=True)
         self.output_path = self.output_dir / self.cfg.output_filename
 
-        self.llm = LangchainLLMWrapper(ChatOpenAI(model=self.cfg.llm_model))
+        self.llm = LangchainLLMWrapper(ChatOpenAI(model=cfg.llm_model))
         self.embedding_model = LangchainEmbeddingsWrapper(
             OpenAIEmbeddings(
-                model=self.cfg.embedding_model,
-                dimensions=self.cfg.embedding_dimension,
+                model=cfg.embedding_model,
+                dimensions=cfg.embedding_dimension,
             )
         )
 
@@ -88,8 +75,7 @@ class SyntheticDataset:
         if "lang" not in df.columns:
             raise ValueError("CSV file must contain 'lang' column.")
 
-        self.langs = df["lang"].unique().tolist()
-        for lang in self.langs:
+        for lang in df["lang"].unique().tolist():
             subsample = df[df["lang"] == lang].sample(
                 n=min(self.cfg.lang_cardinality, len(df[df["lang"] == lang])),
                 random_state=self.cfg.random_state,
@@ -191,15 +177,9 @@ class SyntheticDataset:
         if lang == "en":
             return distribution
 
-        _lang = self.lang_map.get(lang, "")
-        if not _lang:
-            _lang = lang
-            logger.warning(
-                f"Language '{lang}' not found in lang_map. "
-                "Adapting using the raw value."
-            )
+        lang = LangMap.normalize_lang(lang)
         for query, _ in distribution:
-            prompts = asyncio.run(query.adapt_prompts(_lang, llm=self.llm))
+            prompts = asyncio.run(query.adapt_prompts(lang, llm=self.llm))
             query.set_prompts(**prompts)
         return distribution
 

@@ -11,12 +11,12 @@ import litellm
 from bs4 import BeautifulSoup
 from loguru import logger
 
-from src.mocks import Retriever
+from src.mocks import RagPipeline, Retriever
 from src.models import RagConfig
 from src.prompt import SYSTEM_PROMPT, USER_PROMPT
 
 
-class RagPipeline:
+class RAGPipeline(RagPipeline):
     """RAG class for retrieving documents and generating answers."""
 
     def __init__(self, cfg: RagConfig, retriever: Retriever) -> None:

@@ -1,24 +1,36 @@
-import asyncio
-import copy
-import json
+import argparse
 from pathlib import Path
 
-import pandas as pd
-import ragas
-from langchain_openai import ChatOpenAI
 from loguru import logger
-from ragas import EvaluationDataset
-from ragas.llms import LangchainLLMWrapper
-from ragas.metrics import (
-    AnswerRelevancy,
-    ContextPrecision,
-    ContextRecall,
-    Faithfulness,
-)
 
 from src.eval.datagen.synthetic import SyntheticDataset
+from src.eval.evaluate import RagEvaluation
 from src.main import build_rag
 from src.models import TestConfig
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments.
+
+    Returns
+    -------
+        argparse.Namespace: Parsed command line arguments
+    """
+    parser = argparse.ArgumentParser(
+        description="Generate dataset and evaluate RAG pipeline on it."
+    )
+    parser.add_argument(
+        "-0",
+        dest="zero_count",
+        action="count",
+        default=0,
+        help=(
+            "Use -0 to drop evaluation results,"
+            " -00 to drop knowledge graph files,"
+            " -000 to drop data portions split by language,"
+        ),
+    )
+    return parser.parse_args()
 
 
 def load_config() -> TestConfig:
@@ -29,71 +41,31 @@ def load_config() -> TestConfig:
     return test_cfg
 
 
-def build_dataset() -> list[Path]:
-    cfg = load_config()
-
+def build_dataset(cfg: TestConfig, reset_lvl: int = 0) -> list[Path]:
+    """Build the 'question - ground truth answer' dataset with Ragas."""
     dgen = SyntheticDataset(cfg.datagen)
+    if dgen.interim_dir.exists():
+        if reset_lvl >= 2:
+            for path in dgen.output_dir.glob("dset-*.csv"):
+                path.unlink()
+        if reset_lvl >= 3:
+            for path in dgen.interim_dir.iterdir():
+                path.unlink()
+
     dgen.sort_by_lang(cfg.chunked_data)
     return dgen.generate_dataset()[0]
 
 
-def evaluate(data_paths: list[Path]) -> None:
+def evaluate(reset_lvl: int = 0) -> None:
     """Evaluate the dataset."""
-    llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4o-mini"))
-    metrics = [
-        AnswerRelevancy(llm=llm),
-        Faithfulness(llm=llm),
-        ContextRecall(llm=llm),
-        ContextPrecision(llm=llm),
-    ]
-
-    def adapt_scorers(metrics: list, lang: str) -> list:
-        metrics = copy.deepcopy(metrics)
-        lang_map = SyntheticDataset.lang_map
-        for metric in metrics:
-            adapted_prompts = asyncio.run(
-                metric.adapt_prompts(language=lang_map[lang], llm=llm)
-            )
-            metric = metric.set_prompts(**adapted_prompts)
-        return metrics
+    cfg = load_config()
+    data_paths = build_dataset(cfg, reset_lvl)
 
     rag = build_rag()
-    for path in data_paths:
-        dataset = []
-        df = pd.read_csv(path)
-        logger.info(f"Collecting answers for the dataset: {path}")
-        for _, row in df.iterrows():
-            answer, context = rag.answer(  # type: ignore[misc]
-                question=row["user_input"],
-                return_retrieved_context=True,
-            )
-            dataset.append(
-                {
-                    "user_input": row["user_input"],
-                    "retrieved_contexts": context,
-                    "response": answer,
-                    "reference": row["reference"],
-                }
-            )
-        logger.info("Evaluating dataset..")
-        ## FIXME: currently causes something like a thread lock:
-        # lang = path.stem.split("-")[1]
-        # metrics = adapt_scorers(metrics, lang)
-        ## Likely a problem with sync-async execution.
-        eval_results = ragas.evaluate(
-            dataset=EvaluationDataset.from_list(dataset), metrics=metrics
-        )
-        eval_path = path.parent / f"eval_{path.stem}.json"
-        with open(eval_path, "w", encoding="utf-8") as fd:
-            json.dump(eval_results, fd, indent=2, ensure_ascii=False)
-            logger.info(f"Results saved to {eval_path}")
-
-
-def main() -> None:
-    """Run evaluation pipeline."""
-    dataset = build_dataset()
-    evaluate(dataset)
+    evaluation = RagEvaluation(cfg=cfg, rag=rag)
+    evaluation.evaluate(data_paths, reset_lvl >= 1)
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    evaluate(args.zero_count)

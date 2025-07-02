@@ -7,7 +7,7 @@ from src.db import MilvusDB
 from src.mocks import DbConnector
 from src.models import RagConfig
 from src.preproc import DataProcessor
-from src.rag import RagPipeline
+from src.rag import RAGPipeline
 from src.retriever import HybridRetriever
 
 
@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "question",
         type=str,
-        help="The question to ask the RAg pipeline",
+        help="The question to ask the RAG pipeline",
     )
     return parser.parse_args()
 
@@ -70,12 +70,12 @@ def build_db(rag_cfg: RagConfig, reset_lvl: int = 0) -> DbConnector:
     return db
 
 
-def build_rag(reset_lvl: int = 0) -> RagPipeline:
+def build_rag(reset_lvl: int = 0) -> RAGPipeline:
     """Build the RAG pipeline."""
     cfg = load_config()
     db = build_db(cfg, reset_lvl)
     retriever = HybridRetriever(cfg.retrieval, db)
-    return RagPipeline(cfg, retriever)
+    return RAGPipeline(cfg, retriever)
 
 
 if __name__ == "__main__":

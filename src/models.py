@@ -119,7 +119,9 @@ class DataGenConfig(BaseModel):
 class TestConfig(BaseModel):
     """Configuration for testing the RAG pipeline."""
 
+    debug_limit: int | None = None
     chunked_data: str = "data/processed_kb50.csv"
+    eval_llm: str = "gpt-4.1-mini-2025-04-14"
     datagen: DataGenConfig = Field(default_factory=DataGenConfig)
 
     @classmethod

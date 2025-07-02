@@ -44,3 +44,26 @@ class Retriever(Protocol):
         -------
             List of dicts containing retrieved documents and their metadata.
         """
+
+
+class RagPipeline(Protocol):
+    """Mock interface for the RAG pipeline."""
+
+    def answer(
+        self,
+        question: str,
+        retrieval_top_k: int | None = None,
+        temperature: float | None = None,
+        return_retrieved_context: bool = False,
+    ) -> tuple[str, list[str]]:
+        """Generate a source-referenced answer to a question.
+
+        Args:
+            question: The question to answer.
+            retrieval_top_k: Number of documents to retrieve.
+            temperature: Temperature for the LLM response.
+
+        Returns
+        -------
+            HTML answer with expandable sections for retrieved documents.
+        """
