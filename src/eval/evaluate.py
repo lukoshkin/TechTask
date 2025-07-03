@@ -1,5 +1,4 @@
 import asyncio
-import copy
 import json
 from pathlib import Path
 
@@ -33,16 +32,15 @@ class RagEvaluation:
         self.rag = rag
         self.cfg = cfg
         self.llm = LangchainLLMWrapper(ChatOpenAI(model=cfg.eval_llm))
-        self.metrics = metrics or [
+
+    def adapt_scorers(self, lang: str) -> list:
+        """Adapt the metrics to the specified language."""
+        metrics = [
             AnswerRelevancy(llm=self.llm),
             Faithfulness(llm=self.llm),
             ContextRecall(llm=self.llm),
             ContextPrecision(llm=self.llm),
         ]
-
-    def adapt_scorers(self, lang: str) -> list:
-        """Adapt the metrics to the specified language."""
-        metrics = copy.deepcopy(self.metrics)
         lang = LangMap.normalize_lang(lang)
         if lang == "en":
             return metrics
@@ -51,7 +49,7 @@ class RagEvaluation:
             adapted_prompts = asyncio.run(
                 scorer.adapt_prompts(language=lang, llm=self.llm)
             )
-            scorer = scorer.set_prompts(**adapted_prompts)
+            scorer.set_prompts(**adapted_prompts)
         return metrics
 
     def evaluate_dataset(
@@ -84,12 +82,12 @@ class RagEvaluation:
             )
         logger.info("Evaluating dataset..")
         ## FIXME: currently causes something like a thread lock:
-        # lang = data.stem.split("-")[1]
-        # metrics = self.adapt_scorers(lang)
+        lang = data.stem.split("-")[1]
+        metrics = self.adapt_scorers(lang)
         ## Likely a problem with sync-async execution.
         eval_results = ragas.evaluate(
             dataset=EvaluationDataset.from_list(dataset),
-            metrics=self.metrics,
+            metrics=metrics,
         )
         with open(eval_path, "w", encoding="utf-8") as fd:
             json.dump(str(eval_results), fd, indent=2, ensure_ascii=False)
